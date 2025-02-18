@@ -13,7 +13,7 @@ from pathlib import Path
 from tqdm import tqdm
 from typing import List, Tuple, Optional
 
-from auxillary_src.extract_patches import remove_binary_diffs
+from src.auxillary_src.extract_patches import remove_binary_diffs
 from src.constants import (
     APPLY_PATCH_FAIL,
     APPLY_PATCH_PASS
@@ -51,7 +51,8 @@ class EvaluationError(Exception):
 
 
 def extract_model_patch(exec_spec: ExecSpec, raw_model_patch: str, patch_types: List[str], build_mode: BuildMode = "api") -> str:
-    log_dir = get_log_dir(exec_spec.run_id, exec_spec.patch_id, exec_spec.instance_id)
+    log_dir = get_log_dir(
+        exec_spec.run_id, exec_spec.patch_id, exec_spec.instance_id)
 
     if os.path.exists(log_dir / "extracted_patch.diff"):
         with open(log_dir / "extracted_patch.diff", "r") as f:
@@ -62,20 +63,28 @@ def extract_model_patch(exec_spec: ExecSpec, raw_model_patch: str, patch_types: 
         container = None
         client = docker.from_env()
         try:
-            container = start_container(exec_spec, client, logger, build_mode=build_mode)
+            container = start_container(
+                exec_spec, client, logger, build_mode=build_mode)
 
             with open(log_dir / "raw_model_patch.txt", "w") as f:
                 f.write(raw_model_patch)
-            copy_to_container(container, log_dir / "raw_model_patch.txt", Path("/root/raw_model_patch.txt"))
+            copy_to_container(
+                container, log_dir / "raw_model_patch.txt", Path("/root/raw_model_patch.txt"))
 
-            requirements_file = Path(os.path.join(os.path.dirname(__file__), "auxillary_src", "requirements_extraction.txt"))
-            copy_to_container(container, requirements_file, Path("/root/requirements_extraction.txt"))
+            requirements_file = Path(os.path.join(os.path.dirname(
+                __file__), "auxillary_src", "requirements_extraction.txt"))
+            copy_to_container(container, requirements_file, Path(
+                "/root/requirements_extraction.txt"))
 
-            extraction_file = Path(os.path.join(os.path.dirname(__file__), "auxillary_src", "extract_patches.py"))
-            copy_to_container(container, extraction_file, Path("/root/extract_patches.py"))
+            extraction_file = Path(os.path.join(os.path.dirname(
+                __file__), "auxillary_src", "extract_patches.py"))
+            copy_to_container(container, extraction_file,
+                              Path("/root/extract_patches.py"))
 
-            checked_exec_run(container, "pip3 install -r /root/requirements_extraction.txt")
-            res = container.exec_run(f"python3 /root/extract_patches.py --patch_type {' '.join(patch_types)} --reference_commit {exec_spec.base_commit}")
+            checked_exec_run(
+                container, "pip install -r /root/requirements_extraction.txt")
+            res = container.exec_run(
+                f"""python /root/extract_patches.py --patch_type {' '.join(patch_types)} --reference_commit {exec_spec.base_commit}""")
             if res.exit_code == 0:
                 res = container.exec_run("cat /root/extracted_patch.diff")
                 if res.exit_code == 0:
@@ -83,13 +92,16 @@ def extract_model_patch(exec_spec: ExecSpec, raw_model_patch: str, patch_types: 
                     with open(log_dir / "extracted_patch.diff", "w") as f:
                         f.write(extracted_patch)
                 else:
-                    logger.info(f"Patch extraction failed:\n {res.output.decode()}")
+                    logger.info(f"""Patch extraction failed:\n {
+                                res.output.decode("utf-8")}""")
                     extracted_patch = ""
             else:
-                logger.info(f"Patch extraction failed:\n {res.output.decode()}")
+                logger.info(f"""Patch extraction failed:\n {
+                            res.output.decode("utf-8")}""")
                 extracted_patch = ""
         except Exception as e:
-            logger.error(f"Error in extracting patch for {exec_spec.instance_id}: {e}")
+            logger.error(f"""Error in extracting patch for {
+                         exec_spec.instance_id}: {e}""")
             logger.info(traceback.format_exc())
             raise e
         finally:
@@ -100,18 +112,20 @@ def extract_model_patch(exec_spec: ExecSpec, raw_model_patch: str, patch_types: 
 
 def apply_patch_in_container(log_dir: Path, patch_text: str, container: Container, logger: logging.Logger, instance_id: str):
     # Copy model prediction as patch file to container
-    diff_number = len([x for x in os.listdir(log_dir) if x.startswith("patch") and x.endswith(".diff")])
+    diff_number = len([x for x in os.listdir(log_dir)
+                      if x.startswith("patch") and x.endswith(".diff")])
     patch_file = f"patch_{diff_number}.diff"
     patch_path = Path(log_dir / patch_file)
     patch_path.write_text(patch_text)
     logger.info(
-        f"Intermediate patch for {instance_id} written to {patch_path}, now applying to container..."
+        f"""Intermediate patch for {instance_id} written to {
+            patch_path}, now applying to container..."""
     )
     copy_to_container(container, patch_path, Path(f"/tmp/{patch_file}"))
 
     # Attempt to apply patch to container
     val = container.exec_run(
-        f"git apply -v /tmp/{patch_file}",
+        f"""git apply -v /tmp/{patch_file}""",
         workdir="/testbed",
         user="root",
     )
@@ -130,45 +144,50 @@ def eval_in_container(log_dir: str, container: Container, logger: logging.Logger
     eval_file = Path(log_dir / "eval.sh")
     eval_file.write_text(eval_script)
     logger.info(
-        f"Eval script for {instance_id} written to eval.sh, now applying to container..."
+        f"""Eval script for {
+            instance_id} written to eval.sh, now applying to container..."""
     )
     copy_to_container(container, eval_file, Path("/eval.sh"))
     if compute_coverage:
-        copy_to_container(container, Path(os.path.join(os.path.dirname(__file__), "auxillary_src", "trace.py")), Path("/root/trace.py"))
+        copy_to_container(container, Path(os.path.join(os.path.dirname(
+            __file__), "auxillary_src", "trace.py")), Path("/root/trace.py"))
 
     # Run eval script, write output to logs
-    result = exec_run_with_timeout(container, "/bin/bash /eval.sh", timeout=timeout)
+    result = exec_run_with_timeout(
+        container, "/bin/bash /eval.sh", timeout=timeout)
     test_output = result.decode("utf-8")
     test_output_path = log_dir / "test_output.txt"
     with open(test_output_path, "w") as f:
         f.write(test_output)
-    logger.info(f"Test output for {instance_id} written to {test_output_path}")
+    logger.info(f"""Test output for {instance_id} written to {test_output_path}""")
     return test_output_path
 
 
 def eval_in_container_with_diff(log_dir: Path, container: Container, logger: logging.Logger, eval_script: str, timeout: int, instance_id: str, compute_coverage: bool) -> str:
-    git_diff_output_before = log_git_diff(logger, container, "Git diff before:")
+    git_diff_output_before = log_git_diff(
+        logger, container, "Git diff before:")
 
-    test_output_path = eval_in_container(log_dir, container, logger, eval_script, timeout, instance_id, compute_coverage)
+    test_output_path = eval_in_container(
+        log_dir, container, logger, eval_script, timeout, instance_id, compute_coverage)
 
     git_diff_output_after = log_git_diff(logger, container, "Git diff after:")
 
     if git_diff_output_after != git_diff_output_before:
-        logger.info(f"Git diff changed after running eval script")
+        logger.info(f"""Git diff changed after running eval script""")
     return test_output_path
 
 
 def run_instance(
-        test_spec: TestSpec,
-        pred: dict,
-        rm_image: bool,
-        force_rebuild: bool,
-        compute_coverage: bool,
-        run_id: str,
-        patch_types: List[str],
-        timeout: int = None,
-        build_mode: BuildMode = "api",
-    ):
+    test_spec: TestSpec,
+    pred: dict,
+    rm_image: bool,
+    force_rebuild: bool,
+    compute_coverage: bool,
+    run_id: str,
+    patch_types: List[str],
+    timeout: int = None,
+    build_mode: BuildMode = "api",
+):
     """
     Run a single instance with the given prediction.
 
@@ -197,37 +216,46 @@ def run_instance(
     if len(patch_types) == 1 and patch_types[0] == "vanilla":
         model_patch = remove_binary_diffs(pred["model_patch"])
     else:
-        model_patch = extract_model_patch(exec_spec, pred["model_patch"], patch_types, build_mode=build_mode)
+        model_patch = extract_model_patch(
+            exec_spec, pred["model_patch"], patch_types, build_mode=build_mode)
 
     if model_patch:
         caching_log_dir = [False, False, True, True, True, True]
-        patch_ids = ["pred_pre__" + patch_id_base, "pred_post__" + patch_id_base, "gold_pre", "gold_post", "base_pre", "base_post"]
-        test_patches = [model_patch, model_patch, test_spec.golden_test_patch, test_spec.golden_test_patch, None, None]
-        code_patches = [None, test_spec.golden_code_patch, None, test_spec.golden_code_patch, None, test_spec.golden_code_patch]
+        patch_ids = ["pred_pre__" + patch_id_base, "pred_post__" +
+                     patch_id_base, "gold_pre", "gold_post", "base_pre", "base_post"]
+        # 只运行 pred_pre 的，获得 test 的 output，然后再 boost
+        # patch_ids = ["pred_pre__" + patch_id_base, "gold_pre", "gold_post", "base_pre", "base_post"]
+        test_patches = [model_patch, model_patch, test_spec.golden_test_patch,
+                        test_spec.golden_test_patch, None, None]
+        code_patches = [None, test_spec.golden_code_patch, None,
+                        test_spec.golden_code_patch, None, test_spec.golden_code_patch]
 
         output_paths = []
         for cld, test_patch, code_patch, patch_id in zip(caching_log_dir, test_patches, code_patches, patch_ids):
-            exec_spec.test_directives = get_test_directives(model_patch if test_patch is None else test_patch, exec_spec.repo)
+            exec_spec.test_directives = get_test_directives(
+                model_patch if test_patch is None else test_patch, exec_spec.repo)
             exec_spec.patch_list = [] if code_patch is None else [code_patch]
             exec_spec.patch_list += [test_patch]
             exec_spec.patch_id = patch_id
             if cld:
-                log_dir = get_log_dir(patch_id, instance_id, test_directive_id(exec_spec.test_directives))
+                log_dir = get_log_dir(
+                    patch_id, instance_id, test_directive_id(exec_spec.test_directives))
             else:
                 log_dir = None
-            _, test_output_path = run_eval_exec_spec(exec_spec, model_patch, log_dir, build_mode)
+            _, test_output_path = run_eval_exec_spec(
+                exec_spec, model_patch, log_dir, build_mode)
             output_paths.append(test_output_path)
-
 
     return instance_id
 
 
-def run_eval_exec_spec(exec_spec: ExecSpec, model_patch: str, log_dir: Optional[Path]=None, build_mode: BuildMode = "api") -> Tuple[str, Path]:
+def run_eval_exec_spec(exec_spec: ExecSpec, model_patch: str, log_dir: Optional[Path] = None, build_mode: BuildMode = "api") -> Tuple[str, Path]:
     client = docker.from_env()
     instance_id = exec_spec.instance_id
 
     if log_dir is None:
-        log_dir = get_log_dir(exec_spec.run_id, exec_spec.patch_id, exec_spec.instance_id)
+        log_dir = get_log_dir(
+            exec_spec.run_id, exec_spec.patch_id, exec_spec.instance_id)
 
     logger, _ = setup_logging(log_dir, instance_id)
     logger.warning(f"Starting evaluation at {time()}")
@@ -246,9 +274,11 @@ def run_eval_exec_spec(exec_spec: ExecSpec, model_patch: str, log_dir: Optional[
     # Run the instance
     container = None
     try:
-        container = start_container(exec_spec, client, logger, build_mode=build_mode)
+        container = start_container(
+            exec_spec, client, logger, build_mode=build_mode)
 
-        test_output_path = eval_in_container_with_diff(log_dir, container, logger, exec_spec.eval_script, exec_spec.timeout, instance_id, exec_spec.compute_coverage)
+        test_output_path = eval_in_container_with_diff(
+            log_dir, container, logger, exec_spec.eval_script, exec_spec.timeout, instance_id, exec_spec.compute_coverage)
 
         return instance_id, test_output_path
     except EvaluationError as e:
@@ -267,19 +297,19 @@ def run_eval_exec_spec(exec_spec: ExecSpec, model_patch: str, log_dir: Optional[
 
 
 def run_instances(
-        predictions: dict,
-        instances: list,
-        compute_coverage: bool,
-        cache_level: str,
-        clean: bool,
-        force_rebuild: bool,
-        max_workers: int,
-        run_id: str,
-        patch_types: List[str],
-        timeout: int,
-        client: docker.DockerClient,
-        build_mode: BuildMode,
-    ):
+    predictions: dict,
+    instances: list,
+    compute_coverage: bool,
+    cache_level: str,
+    clean: bool,
+    force_rebuild: bool,
+    max_workers: int,
+    run_id: str,
+    patch_types: List[str],
+    timeout: int,
+    client: docker.DockerClient,
+    build_mode: BuildMode,
+):
     """
     Run all instances for the given predictions in parallel.
 
@@ -303,7 +333,8 @@ def run_instances(
         for tag in i.tags if tag in instance_image_ids
     }
     if not force_rebuild and len(existing_images):
-        print(f"Found {len(existing_images)} existing instance images. Will reuse them.")
+        print(f"""Found {len(existing_images)
+                       } existing instance images. Will reuse them.""")
 
     # run instances in parallel
     print(f"Running {len(instances)} instances...")
@@ -354,20 +385,22 @@ def run_instances(
                 print(f"TimeoutError: {e}")
     print("All instances run.")
 
+
 def find_all_test_output_paths(dir: Path):
     for file in dir.rglob("test_output.txt"):
         yield file
+
 
 def test_directive_id(test_directives: list[str]):
     return hashlib.sha256("__".join(test_directives).encode()).hexdigest()
 
 
 def make_run_report(
-        predictions: dict,
-        dataset: list,
-        client: docker.DockerClient,
-        run_id: str
-    ):
+    predictions: dict,
+    dataset: list,
+    client: docker.DockerClient,
+    run_id: str
+):
     """
     Make a final evaluation and run report of the instances that have been run.
     Also reports on images and containers that may still running!
@@ -388,16 +421,15 @@ def make_run_report(
     coverages = []
     coverage_deltas = []
 
-
     # iterate through dataset and check if the instance has been run
     for instance in tqdm(dataset):
         instance_id = instance["instance_id"]
         prediction = predictions[instance_id]
         patch_id_base = prediction["model_name_or_path"].replace("/", "__")
         model_patch_file = get_log_dir(
-                run_id,
-                "pred_pre__" + patch_id_base,
-                instance_id,
+            run_id,
+            "pred_pre__" + patch_id_base,
+            instance_id,
         ) / "model_patch.diff"
         test_output_file = model_patch_file.parent / "test_output.txt"
         if not model_patch_file.exists() or not test_output_file.exists():
@@ -420,20 +452,23 @@ def make_run_report(
 
             patch_ids = ["pred_pre__" + patch_id_base, "pred_post__" + patch_id_base, "gold_pre", "gold_post",
                          "base_pre", "base_post"]
-            model_test_directive_path = test_directive_id(get_test_directives(model_patch, instance["repo"]))
+            model_test_directive_path = test_directive_id(
+                get_test_directives(model_patch, instance["repo"]))
             gold_test_directive_path = test_directive_id(
                 get_test_directives(instance["golden_test_patch"], instance["repo"]))
             directive_paths = [gold_test_directive_path, gold_test_directive_path, model_test_directive_path,
                                model_test_directive_path]
             output_paths = (
-                    [
-                        get_log_dir(run_id, patch_id, instance_id) / "test_output.txt" for patch_id in patch_ids[:2]
-                    ] + [
-                        get_log_dir(patch_id, instance_id, directive_path) / "test_output.txt" for
-                        patch_id, directive_path in zip(patch_ids[2:], directive_paths)
-                    ]
+                [
+                    get_log_dir(run_id, patch_id, instance_id) / "test_output.txt" for patch_id in patch_ids[:2]
+                ] + [
+                    get_log_dir(patch_id, instance_id, directive_path) / "test_output.txt" for
+                    patch_id, directive_path in zip(
+                        patch_ids[2:], directive_paths)
+                ]
             )
-            report = report_results(patch_id_base, run_id, instance["golden_code_patch"], output_paths, instance_id, instance["repo"])
+            report = report_results(
+                patch_id_base, run_id, instance["golden_code_patch"], output_paths, instance_id, instance["repo"])
 
         if report[instance_id]["resolved"]:
             # Record if the instance was resolved
@@ -443,7 +478,6 @@ def make_run_report(
         if report[instance_id]["coverage_pred"] is not None:
             coverage_deltas.append(report[instance_id]["coverage_delta_pred"])
             coverages.append(report[instance_id]["coverage_pred"])
-
 
     if len(coverage_deltas) > 0:
         coverage_delta = sum(coverage_deltas)/len(coverage_deltas)
@@ -493,10 +527,11 @@ def make_run_report(
         "unremoved_images": list(sorted(unremoved_images)),
     }
     report_file = Path(os.path.join("evaluation_results",
-        list(predictions.values())[0]["model_name_or_path"].replace("/", "__")
-        + f".{run_id}"
-        + ".json")
-    )
+                                    list(predictions.values())[
+                                        0]["model_name_or_path"].replace("/", "__")
+                                    + f".{run_id}"
+                                    + ".json")
+                       )
     Path("evaluation_results").mkdir(parents=True, exist_ok=True)
     with open(report_file, "w") as f:
         print(json.dumps(report, indent=4), file=f)

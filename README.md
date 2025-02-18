@@ -64,6 +64,12 @@ python -m src.main \
     # use --run_id to name the evaluation run
 ```
 
+python -m src.main \
+    --dataset_name princeton-nlp/SWE-bench_Lite \
+    --predictions_path test_prediction/demo.json \
+    --max_workers 2 \
+    --run_id demo_django
+
 This command will generate docker build logs (`image_build_logs`) and evaluation logs (`run_instance_swt_logs`) in the current directory.
 
 The final evaluation results will be stored in the `evaluation_results` directory.

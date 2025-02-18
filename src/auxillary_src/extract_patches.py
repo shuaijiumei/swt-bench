@@ -46,6 +46,9 @@ class CustomPatch:
     changed_lines: list
 
 
+# 函数：get_first_idx
+# 功能：返回列表中第一个出现 "-" 或 "+" 的索引；如果都不存在，则返回列表长度
+# 参数：charlist - 一个字符列表
 def get_first_idx(charlist):
     """Get index of first occurrence of "-" or "+" in charlist"""
     first_min = charlist.index("-") if "-" in charlist else len(charlist)
@@ -53,6 +56,9 @@ def get_first_idx(charlist):
     return min(first_min, first_plus)
 
 
+# 函数：get_last_idx
+# 功能：返回列表中最后一个 "-" 或 "+" 出现的位置的后续索引
+# 参数：charlist - 一个字符列表
 def get_last_idx(charlist):
     """Get index of last occurrence of "-" or "+" in charlist"""
     char_idx = get_first_idx(charlist[::-1])
@@ -60,6 +66,10 @@ def get_last_idx(charlist):
     return last_idx + 1
 
 
+# 函数：strip_content
+# 功能：清理 hunk 内容，移除非 "-" 或 "+" 开头的行以及各行尾部空白字符
+# 参数：hunk - 表示 diff hunk 的字符串
+# 返回：清理后的 hunk 字符串及调整量（用于修正起始行号）
 def strip_content(hunk):
     """Remove trailing non +/- lines and trailing whitespace per line per hunk"""
     first_chars = list(map(lambda x: None if not len(x) else x[0], hunk.split("\n")))
@@ -69,6 +79,10 @@ def strip_content(hunk):
     new_hunk = "\n" + "\n".join(new_lines) + "\n"
     return new_hunk, first_idx - 1
 
+# 函数：remove_binary_diffs
+# 功能：过滤掉 diff 文本中针对二进制文件产生的差异内容
+# 参数：diff_content - 原始 diff 文本字符串
+# 返回：不包含二进制文件数据的 diff 文本
 def remove_binary_diffs(diff_content):
     binary_file_indicator = 'Binary files'
 
@@ -89,6 +103,10 @@ def remove_binary_diffs(diff_content):
 
     return '\n'.join(new_lines) + "\n"
 
+# 函数：extract_fuzzy_patch
+# 功能：提取模糊 patch，清理 hunk 空白及前置、后置上下文，生成 FuzzyFilePatch 列表
+# 参数：model_patch - 原始 diff 文本
+# 返回：FuzzyFilePatch 对象列表，每个对象包含文件名及其模糊 patch 信息
 def extract_fuzzy_patch(model_patch) -> List[FuzzyFilePatch]:
     """
     Wrapper function that takes hunk and
@@ -154,7 +172,10 @@ def extract_fuzzy_patch(model_patch) -> List[FuzzyFilePatch]:
 
     return patches
 
-
+# 函数：extract_custom_patches
+# 功能：从原始 diff 文本中提取自定义 patch，识别文件名、类型、行号和变更内容
+# 参数：model_patch - 包含 diff 文本的字符串
+# 返回：CustomPatch 对象列表，每个对象描述一次自定义 patch 变更
 def extract_custom_patches(model_patch):
     """
     Wrapper function that takes response and
@@ -179,7 +200,10 @@ def extract_custom_patches(model_patch):
             patches.append(CustomPatch(file_name, patch_type, rough_line_number, changed_lines))
     return patches
 
-
+# 函数：extract_minimal_patch
+# 功能：生成最精简的 diff patch，处理 hunk 内容并重新计算行号和差异行数
+# 参数：model_patch - 原始 diff 文本字符串
+# 返回：处理后的最小化 diff patch 字符串
 def extract_minimal_patch(model_patch) -> str:
     """
     Wrapper function that takes hunk and
@@ -211,7 +235,10 @@ def extract_minimal_patch(model_patch) -> str:
     return new_patch
 
 
-
+# 函数：get_hunk_stats
+# 功能：根据 hunk 内的内容统计上下文、增加和删除的行数，更新 hunk 的起始行、长度以及累计偏移量
+# 参数：pre_start, pre_len, post_start, post_len - 原始 hunk 的起始行和长度；hunk - 当前 hunk 的文本；total_delta - 累计偏移量
+# 返回：更新后的 pre_start, pre_len, post_start, post_len 和 total_delta
 def get_hunk_stats(pre_start, pre_len, post_start, post_len, hunk, total_delta):
     """Recalculate hunk start/end position and diff delta"""
     stats = {"context": 0, "added": 0, "subtracted": 0}
@@ -232,7 +259,13 @@ def get_hunk_stats(pre_start, pre_len, post_start, post_len, hunk, total_delta):
     total_delta = total_delta + (post_len - pre_len)
     return pre_start, pre_len, post_start, post_len, total_delta
 
-
+# 函数：apply_fuzzy_patches
+# 功能：将提取到的模糊 patch 应用到指定的测试路径下，匹配时不要求精确行号
+# 参数：
+#   fuzzy_patch - FuzzyFilePatch 对象列表
+#   testbed - 测试环境目录路径
+#   patch_type - patch 类型（默认为 "fuzzy"）
+# 返回：布尔值，表示 patch 是否成功应用
 def apply_fuzzy_patches(fuzzy_patch: List[FuzzyFilePatch], testbed: str, patch_type: str = "fuzzy") -> bool:
     """
     Apply a git diff patch without exact line number matching
@@ -310,6 +343,13 @@ class ReplaceFunctionTransformer(ast.NodeTransformer):
         return self.generic_visit(node)
 
 
+# 函数：apply_custom_patches
+# 功能：将自定义 patch 应用到任务环境中，并返回 git patch
+# 参数：
+#   custom_patches - CustomPatch 对象列表
+#   testbed - 测试环境目录路径
+#   patch_type - patch 类型（默认为 "custom"）
+# 返回：布尔值，表示 patch 是否成功应用
 def apply_custom_patches(custom_patches: List[CustomPatch], testbed:str, patch_type: str = "custom"
 ) -> bool:
     """
@@ -380,6 +420,10 @@ def apply_custom_patches(custom_patches: List[CustomPatch], testbed:str, patch_t
     return True
 
 
+# 函数：overlap_score
+# 功能：计算两个字符串列表之间的匹配得分，基于编辑距离计算字符串相似性
+# 参数：a, b - 两个字符串列表（通常为上下文行）
+# 返回：匹配得分（数值）
 def overlap_score(a: List[str], b: List[str]):
     score = 0
     for j, context_line in enumerate(a):
@@ -389,7 +433,12 @@ def overlap_score(a: List[str], b: List[str]):
         score += (1 - (distance / max(len(b[j]), len(context_line)))) if len(b[j]) > 0 or len(context_line) > 0 else 0
     return score
 
-
+# 函数：write_diff_and_reset
+# 功能：将当前测试路径下的 git diff 写入文件，并重置仓库至指定提交状态
+# 参数：
+#   testbed - 工作目录路径（git 仓库所在目录）
+#   reference_commit - 用于对比的参考提交
+#   target_file - 保存 diff 输出的文件路径
 def write_diff_and_reset(testbed: str, reference_commit: str ='', target_file:str = "./processed_patch.diff"):
     repo = git.Repo(testbed)
     repo.git.add(all=True)
@@ -399,7 +448,12 @@ def write_diff_and_reset(testbed: str, reference_commit: str ='', target_file:st
 
     repo.git.reset('--hard', reference_commit)
 
-
+# 函数：apply_patch
+# 功能：使用 git apply 命令将给定 patch 应用到测试环境目录中
+# 参数：
+#   patch - diff patch 文本
+#   testbed - 测试环境目录路径
+# 返回：布尔值，表示 patch 是否成功应用
 def apply_patch(patch, testbed):
     repo = git.Repo(testbed)
     with NamedTemporaryFile("w", suffix=".diff") as f:
@@ -410,7 +464,14 @@ def apply_patch(patch, testbed):
         except git.exc.GitCommandError as e:
             return False
 
-
+# 函数：run
+# 功能：根据模型输出文件及指定 patch 类型，选择合适的 patch 应用方式，并最终写入 diff 文件后重置仓库
+# 参数：
+#   model_output_file - 原始模型输出的文件路径（包含 diff 文本）
+#   testbed - 测试环境路径
+#   patch_type - patch 类型列表（如 "vanilla", "fuzzy", "custom"）
+#   reference_commit - 用于生成 diff 的参考提交标识
+#   target_file - 输出 diff 文件路径
 def run(model_output_file: str, testbed:str, patch_type: List[str], reference_commit: str, target_file: str):
     with open(model_output_file, "r") as f:
         raw_model_output = f.read()
@@ -433,7 +494,8 @@ def run(model_output_file: str, testbed:str, patch_type: List[str], reference_co
 
     write_diff_and_reset(testbed, reference_commit, target_file)
 
-
+# 函数：main
+# 功能：程序入口，解析命令行参数并调用 run 函数启动 patch 处理流程
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_output_file", default="/root/raw_model_patch.txt", type=str, help="Path to raw model output")

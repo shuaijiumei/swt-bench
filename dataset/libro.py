@@ -16,6 +16,7 @@ import fire
 from unidiff import PatchSet
 
 from datasets import load_from_disk, load_dataset, Dataset, DatasetDict
+from src.utils import extract_execution_trace_from_log
 
 PROMPT = """
 You are an automated expert software engineer working on a project. Below is a user issue in a repository.
@@ -34,6 +35,7 @@ Please answer whether the test case accurately tests the issue described by the 
 Please answer with "yes" or "no".
 """
 
+
 def extract_execution_trace_from_log(log: str) -> List[str]:
     # extract the execution trace from the evaluation output
     log = log.splitlines()
@@ -48,8 +50,10 @@ def extract_execution_trace_from_log(log: str) -> List[str]:
             break
     return log[i + 1:j - 1]
 
+
 def load_log(eval_output_dir: str, run_id, model, pre_post: Literal["pre", "post"]) -> dict:
-    run_path = pathlib.Path(eval_output_dir) / run_id / f"pred_{pre_post}__{model}"
+    run_path = pathlib.Path(eval_output_dir) / run_id / \
+        f"pred_{pre_post}__{model}"
     logs = {}
     for dir in run_path.iterdir():
         if not dir.is_dir():
@@ -60,6 +64,7 @@ def load_log(eval_output_dir: str, run_id, model, pre_post: Literal["pre", "post
         with open(log) as f:
             logs[dir.name] = f.read()
     return logs
+
 
 def load_patch(eval_output_dir: str, run_id, model) -> dict:
     run_path = pathlib.Path(eval_output_dir) / run_id / f"pred_post__{model}"
@@ -74,6 +79,7 @@ def load_patch(eval_output_dir: str, run_id, model) -> dict:
             patches[dir.name] = f.read()
     return patches
 
+
 def load_pre_post_logs(eval_output_dir: str, run_id, model) -> dict:
     pre_logs = load_log(eval_output_dir, run_id, model, "pre")
     post_logs = load_log(eval_output_dir, run_id, model, "post")
@@ -84,12 +90,13 @@ def load_pre_post_logs(eval_output_dir: str, run_id, model) -> dict:
         "patch": patch,
     }
 
+
 def main(
     eval_output_dir: str = "./run_instance_swt_logs",
     dataset: str = "princeton-nlp/SWE-bench_Lite",
     run_id_pattern: str = "libro_gpt-4-1106-preview__bm25_27k_cl100k__seed={seed},temperature=0.7.jsonl",
     model: str = "gpt-4-1106-preview",
-    seeds: list[int] = (1,2,3,4,5),
+    seeds: list[int] = (1, 2, 3, 4, 5),
     out_dataset_prefix: str = "./datasets/libro",
     split: str = "test",
 ):
@@ -99,7 +106,8 @@ def main(
     logs_by_instance = {}
     new_examples = []
     for seed, run_id in zip(seeds, run_ids):
-        logs_by_instance[seed] = load_pre_post_logs(eval_output_dir, run_id, model)
+        logs_by_instance[seed] = load_pre_post_logs(
+            eval_output_dir, run_id, model)
     for example in dataset[split]:
         instance_id = example["instance_id"]
         user_issue = example["problem_statement"]
@@ -112,7 +120,8 @@ def main(
             execution_trace_post = extract_execution_trace_from_log(post_log)
             patch = logs_by_instance[seed]["patch"].get(instance_id)
 
-            diffstuff = "".join(difflib.unified_diff(execution_trace_pre, execution_trace_post))
+            diffstuff = "".join(difflib.unified_diff(
+                execution_trace_pre, execution_trace_post))
             if not diffstuff:
                 # if there is no difference in the traces, the unit test is not testing anything
                 continue
@@ -128,10 +137,8 @@ def main(
             new_examples.append(new_example)
     ds_l = Dataset.from_list(new_examples)
     ds = DatasetDict({split: ds_l})
-    ds.save_to_disk(out_dataset_prefix + f"__{run_id_pattern}__{seeds}__{model}__{split}")
-
-
-        
+    ds.save_to_disk(out_dataset_prefix +
+                    f"__{run_id_pattern}__{seeds}__{model}__{split}")
 
 
 if __name__ == "__main__":

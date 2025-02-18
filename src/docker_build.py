@@ -16,6 +16,7 @@ from src.constants import (
     ENV_IMAGE_BUILD_DIR,
     INSTANCE_IMAGE_BUILD_DIR,
     MAP_VERSION_TO_INSTALL,
+    APT_SOURCES,
 )
 from src.test_spec import (
     get_test_specs_from_dataset,
@@ -116,27 +117,44 @@ def build_image(
     ):
     """
     Builds a docker image with the given name, setup scripts, dockerfile, and platform.
-
-    Args:
-        image_name (str): Name of the image to build
-        setup_scripts (dict): Dictionary of setup script names to setup script contents
-        dockerfile (str): Contents of the Dockerfile
-        platform (str): Platform to build the image for
-        client (docker.DockerClient): Docker client to use for building the image
-        build_dir (Path): Directory for the build context (will also contain logs, scripts, and artifacts)
-        nocache (bool): Whether to use the cache when building
     """
     # Create a logger for the build process
     logger = setup_logger(image_name, build_dir / "build_image.log", "w")
-    logger.info(
-        f"Building image {image_name}\n"
-        f"Using dockerfile:\n{dockerfile}\n"
-        f"Adding ({len(setup_scripts)}) setup scripts to image build repo"
-    )
-
-    for setup_script_name, setup_script in setup_scripts.items():
-        logger.info(f"[SETUP SCRIPT] {setup_script_name}:\n{setup_script}")
+    
     try:
+        # 写入 sources.list 文件
+        sources_list_path = build_dir / "sources.list"
+        with open(sources_list_path, "w") as f:
+            f.write(APT_SOURCES)
+
+        # 在 FROM 指令之后添加更换源的命令，先安装证书
+        apt_source_commands = """
+# 安装证书并更换源
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# 更换 apt 源为国内源
+COPY sources.list /etc/apt/sources.list
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt-get clean && \
+    apt-get update
+"""
+        # 分割 Dockerfile 内容，在 FROM 之后插入源配置
+        dockerfile_lines = dockerfile.splitlines()
+        for i, line in enumerate(dockerfile_lines):
+            if line.startswith('FROM'):
+                dockerfile_lines.insert(i + 1, apt_source_commands)
+                break
+        
+        dockerfile = '\n'.join(dockerfile_lines)
+
+        logger.info(
+            f"Building image {image_name}\n"
+            f"Using dockerfile:\n{dockerfile}\n"
+            f"Adding ({len(setup_scripts)}) setup scripts to image build repo"
+        )
+
         # Write the setup scripts to the build directory
         for setup_script_name, setup_script in setup_scripts.items():
             setup_script_path = build_dir / setup_script_name
@@ -180,7 +198,7 @@ def build_image(
         logger.error(f"Error building image {image_name}: {e}")
         raise BuildImageError(image_name, str(e), logger) from e
     finally:
-        close_logger(logger)  # functions that create loggers should close them
+        close_logger(logger)
 
 
 def build_base_images(
