@@ -194,4 +194,5 @@ image_build_logs/
 *.jsonl.*
 *.json
 *.txt
-/docs/
+/docs/my-react-app/
+/docs/original/
