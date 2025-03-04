@@ -189,3 +189,7 @@ image_build_logs/
 /test/
 /inference_output/
 /evaluation_results/
+
+*.json
+*.txt
+/docs/*

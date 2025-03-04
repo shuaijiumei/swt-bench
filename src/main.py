@@ -19,7 +19,7 @@ from src.docker_utils import (
 
 from src.dataset import get_dataset_from_preds, get_gold_predictions
 from src.utils import str2bool
-from run_evaluation import run_instances, make_run_report
+from src.run_evaluation import run_instances, make_run_report
 
 def run(
         dataset_name: str,

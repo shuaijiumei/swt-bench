@@ -4,7 +4,7 @@ from typing import Any, Dict, Tuple, List, Optional
 import json
 from unidiff import PatchSet
 
-from exec_spec import ExecMode
+from src.exec_spec import ExecMode
 from src.constants import (
     APPLY_PATCH_FAIL,
     APPLY_PATCH_PASS,
