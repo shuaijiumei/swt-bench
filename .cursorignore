@@ -1,0 +1,67 @@
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore log files
+*.log
+
+# Ignore temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Ignore virtual environment directories
+venv/
+env/
+.venv/
+.env/
+
+# Ignore build directories
+build/
+dist/
+*.egg-info/
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore Docker files
+Dockerfile
+*.dockerfile
+
+# Ignore other common files
+*.DS_Store
+*.class
+*.exe
+*.o
+*.out
+*.so
+*.a
+*.dll
+*.pdb
+*.idb
+*.ilk
+*.obj
+*.lib
+*.bin
+*.apk
+*.app
+*.ipa
+*.jar
+*.war
+*.zip
+*.tar
+*.gz
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+
+run_instance_swt_logs/
+image_build_logs/
+logs/
+docs/
+test_prediction/agentless_test/
+test_prediction/agentless_test_merge/

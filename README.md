@@ -66,9 +66,17 @@ python -m src.main \
 
 python -m src.main \
     --dataset_name princeton-nlp/SWE-bench_Lite \
-    --predictions_path test_prediction/demo.json \
-    --max_workers 2 \
-    --run_id demo_django
+    --predictions_path test_prediction/test_patch_0.jsonl \
+    --max_workers 5 \
+    --run_id only_evaluation/agentless_test_demo/astropy__astropy-6938 \
+    --only_run_test True
+
+python -m src.main \
+    --dataset_name princeton-nlp/SWE-bench_Lite \
+    --predictions_path selection_test/results_other.json \
+    --max_workers 4 \
+    --run_id agentless_test_partial_other \
+    --only_run_test False
 
 This command will generate docker build logs (`image_build_logs`) and evaluation logs (`run_instance_swt_logs`) in the current directory.
 

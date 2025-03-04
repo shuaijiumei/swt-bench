@@ -37,6 +37,7 @@ def run(
     timeout: int,
     build_mode: "BuildMode" = "api",
     skip_eval: bool = False,
+    only_run_test: bool = False,
 ):
     """
     Run evaluation harness for the given dataset and predictions.
@@ -78,11 +79,12 @@ def run(
         # build environment images + run instances
         # build_env_images(client, dataset, force_rebuild, max_workers)
         run_instances(predicted_tests, dataset, compute_coverage, cache_level, clean,
-                      force_rebuild, max_workers, run_id, patch_types, timeout, client, build_mode)
+                      force_rebuild, max_workers, run_id, patch_types, timeout, client, build_mode, args.only_run_test)
 
     # clean images + make final report
     clean_images(client, existing_images, cache_level, clean)
-    make_run_report(predicted_tests, full_dataset, client, run_id)
+    if not only_run_test:
+        make_run_report(predicted_tests, full_dataset, client, run_id)
 
 
 if __name__ == "__main__":
@@ -134,6 +136,9 @@ if __name__ == "__main__":
     # Skip running the evaluation and just grade
     parser.add_argument(
         "--skip_eval", type=str2bool, default=False, help="Skip evaluation and only generate reports"
+    )
+    parser.add_argument(
+        "--only_run_test", type=str2bool, default=False, help="Evaluate only the test instances"
     )
     args = parser.parse_args()
 

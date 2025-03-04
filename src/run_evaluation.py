@@ -32,6 +32,7 @@ from src.test_spec import make_test_spec, TestSpec
 from src.utils import get_log_dir, get_test_directives, log_git_diff, setup_logging, link_image_build_dir, close_logger
 from src.exec_spec import ExecSpec, make_exec_spec
 from src.grading import report_results
+import re
 
 
 class EvaluationError(Exception):
@@ -187,6 +188,7 @@ def run_instance(
     patch_types: List[str],
     timeout: int = None,
     build_mode: BuildMode = "api",
+    only_run_test: bool = False,
 ):
     """
     Run a single instance with the given prediction.
@@ -204,7 +206,7 @@ def run_instance(
 
     exec_spec = test_spec.exec_spec
     exec_spec.timeout = timeout
-    exec_spec.rm_image = rm_image
+    exec_spec.rm_image = rm_image 
     exec_spec.force_rebuild = force_rebuild
     exec_spec.run_id = run_id
     exec_spec.compute_coverage = compute_coverage
@@ -220,15 +222,22 @@ def run_instance(
             exec_spec, pred["model_patch"], patch_types, build_mode=build_mode)
 
     if model_patch:
+        '''既在 pre 时运行，又在 post 时运行，完整的检测测试是否完备'''
         caching_log_dir = [False, False, True, True, True, True]
         patch_ids = ["pred_pre__" + patch_id_base, "pred_post__" +
                      patch_id_base, "gold_pre", "gold_post", "base_pre", "base_post"]
-        # 只运行 pred_pre 的，获得 test 的 output，然后再 boost
-        # patch_ids = ["pred_pre__" + patch_id_base, "gold_pre", "gold_post", "base_pre", "base_post"]
         test_patches = [model_patch, model_patch, test_spec.golden_test_patch,
                         test_spec.golden_test_patch, None, None]
         code_patches = [None, test_spec.golden_code_patch, None,
                         test_spec.golden_code_patch, None, test_spec.golden_code_patch]
+        
+        '''只在 pre-code 时运行，检测测试是否能够 fail，并且根据测试的输出进行 boost'''
+        if only_run_test:
+            caching_log_dir = [False]
+            # 只运行 pred_pre 的，获得 test 的 output，然后再 boost
+            patch_ids = ["pred_pre__" + patch_id_base]
+            test_patches = [model_patch]
+            code_patches = [None]
 
         output_paths = []
         for cld, test_patch, code_patch, patch_id in zip(caching_log_dir, test_patches, code_patches, patch_ids):
@@ -295,6 +304,32 @@ def run_eval_exec_spec(exec_spec: ExecSpec, model_patch: str, log_dir: Optional[
         logger.warning(f"End of eval at {time()}")
         close_logger(logger)
 
+def extract_test_output(run_id: str, patch_id_base: str, instance_id: str) -> None:
+    log_dir = get_log_dir(run_id, "pred_pre__" + patch_id_base, instance_id)
+    test_output_path = log_dir / "test_output.txt"
+    test_exec_spec_path = log_dir / "exec_spec.json"
+    if not test_exec_spec_path.exists():
+        raise FileNotFoundError(f"Test exec spec file not found at {test_exec_spec_path}")
+
+    if not test_output_path.exists():
+        raise FileNotFoundError(f"Test output file not found at {test_output_path}")
+    
+    with open(test_exec_spec_path, "r") as f:
+        exec_spec = json.load(f)
+        test_command = exec_spec['test_command']
+    
+    with open(test_output_path, "r") as f:
+        test_output = f.read()
+        # 在 test_output 中找到 test_command 的输出, 截取后面的内容
+        # 检测正则匹配 Ran * tests in * 格式的语句，截取前面的内容
+        match = re.search(r"Ran \d+ tests? in \d+\.\d+s", test_output)
+        if match:
+            test_output_content = test_output[test_output.find(test_command):match.start()]
+        else:
+            raise ValueError(f"Test command output not found in test output file {test_output_path}")
+
+    with open(log_dir / "test_output_content.txt", "w") as f:
+        f.write(test_output_content)
 
 def run_instances(
     predictions: dict,
@@ -309,6 +344,7 @@ def run_instances(
     timeout: int,
     client: docker.DockerClient,
     build_mode: BuildMode,
+    only_run_test: bool = False,
 ):
     """
     Run all instances for the given predictions in parallel.
@@ -358,6 +394,7 @@ def run_instances(
                     patch_types,
                     timeout,
                     build_mode,
+                    only_run_test
                 )
                 for test_spec in test_specs
             ]
@@ -532,7 +569,10 @@ def make_run_report(
                                     + f".{run_id}"
                                     + ".json")
                        )
+    
     Path("evaluation_results").mkdir(parents=True, exist_ok=True)
+    if not report_file.parent.exists():
+        report_file.parent.mkdir(parents=True, exist_ok=True)
     with open(report_file, "w") as f:
         print(json.dumps(report, indent=4), file=f)
     print(f"Report written to {report_file}")
