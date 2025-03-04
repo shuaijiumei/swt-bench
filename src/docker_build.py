@@ -8,7 +8,6 @@ import docker
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-import os
 from docker.models.containers import Container
 
 from src.constants import (
@@ -19,7 +18,6 @@ from src.constants import (
     APT_SOURCES,
 )
 from src.test_spec import (
-    get_test_specs_from_dataset,
     make_test_spec,
     TestSpec
 )
@@ -53,6 +51,7 @@ class BuildImageError(Exception):
         )
 
 BuildMode = Literal["cli", "api"]
+ExecMode = Literal["unit_test", "reproduction_script"]
 
 def docker_build_cli(
     build_dir: Path,

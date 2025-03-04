@@ -64,4 +64,4 @@ image_build_logs/
 logs/
 docs/
 test_prediction/agentless_test/
-test_prediction/agentless_test_merge/
+test_prediction/agentless_test_merge/# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)

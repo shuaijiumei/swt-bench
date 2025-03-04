@@ -120,6 +120,11 @@ def parse_log_pytest_v2(log: str) -> dict[str, str]:
                 line = line.replace(" - ", " ")
             test_case = line.split()
             test_status_map[test_case[1]] = test_case[0]
+        # Support older pytest versions by checking if the line ends with the test status
+        elif any([line.endswith(x.value) for x in TestStatus]):
+            test_case = line.split()
+            if len(test_case) >= 2:
+                test_status_map[test_case[0]] = test_case[1]
     return test_status_map
 
 
@@ -199,6 +204,17 @@ def parse_log_matplotlib(log: str) -> dict[str, str]:
                 continue
             test_status_map[test_case[1]] = test_case[0]
     return test_status_map
+
+def parse_log_reproduction_script(log: str) -> dict[str, str]:
+    """
+    If there is a nonzero exit code log a "main" test case with status "FAILED"
+    """
+    exit_code = re.findall(r"^\+ echo (\d+)$", log, re.MULTILINE)
+    if not exit_code:
+        return {}
+    name = "reproduction_script"
+    status = TestStatus.PASSED.value if exit_code[0] == "0" else TestStatus.FAILED.value
+    return {name: status}
 
 
 parse_log_astroid = parse_log_pytest

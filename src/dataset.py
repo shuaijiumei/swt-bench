@@ -50,7 +50,7 @@ def get_dataset_from_preds(
         if instance_ids - dataset_ids:
             raise ValueError(
                 (
-                    "Some instance IDs not found in dataset!"
+                    "Warning: Some instance IDs not found in dataset!"
                     f"\nMissing IDs:\n{' '.join(instance_ids - dataset_ids)}"
                 )
             )
@@ -62,12 +62,13 @@ def get_dataset_from_preds(
     # check that all prediction IDs are in the dataset
     prediction_ids = set(predicted_tests.keys())
     if prediction_ids - dataset_ids:
-        raise ValueError(
+        print(
             (
-                "Some prediction IDs not found in dataset!"
+                "Warning: Some prediction IDs not found in dataset! These will be skipped."
                 f"\nMissing IDs:\n{' '.join(prediction_ids - dataset_ids)}"
             )
         )
+        prediction_ids = prediction_ids & dataset_ids
 
     if instance_ids:
         # filter dataset to just the instance IDs

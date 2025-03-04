@@ -1,5 +1,8 @@
 from typing import TYPE_CHECKING
+
+
 if TYPE_CHECKING:
+    from exec_spec import ExecMode
     from docker_build import BuildMode
 
 import docker
@@ -18,7 +21,7 @@ from src.run_evaluation import run_instances, make_run_report
 
 from src.dataset import get_dataset_from_preds, get_gold_predictions
 from src.utils import str2bool
-
+from src.run_evaluation import run_instances, make_run_report
 
 def run(
     dataset_name: str,
@@ -38,6 +41,8 @@ def run(
     build_mode: "BuildMode" = "api",
     skip_eval: bool = False,
     only_run_test: bool = False,
+    exec_mode: "ExecMode" = "unit_test",
+    reproduction_script_name: Optional[str] = None,
 ):
     """
     Run evaluation harness for the given dataset and predictions.
@@ -79,12 +84,12 @@ def run(
         # build environment images + run instances
         # build_env_images(client, dataset, force_rebuild, max_workers)
         run_instances(predicted_tests, dataset, compute_coverage, cache_level, clean,
-                      force_rebuild, max_workers, run_id, patch_types, timeout, client, build_mode, args.only_run_test)
+                      force_rebuild, max_workers, run_id, patch_types, timeout, client, build_mode, exec_mode, reproduction_script_name, args.only_run_test)
 
     # clean images + make final report
     clean_images(client, existing_images, cache_level, clean)
     if not only_run_test:
-        make_run_report(predicted_tests, full_dataset, client, run_id)
+        make_run_report(predicted_tests, full_dataset, client, run_id, exec_mode)
 
 
 if __name__ == "__main__":
@@ -139,6 +144,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--only_run_test", type=str2bool, default=False, help="Evaluate only the test instances"
+    )
+    parser.add_argument(
+        "--exec_mode", type=str, choices=["unit_test", "reproduction_script"], default="unit_test", help="Choose execution mode of generated patches. unit_test: run patch as part of test suite. parses test logs for deciding pass/fail.  reproduction_script: run patch as a separate script. return status of script decides pass/fail"
+    )
+    parser.add_argument(
+        "--reproduction_script_name", type=str, default=None, help="Name of the reproduction script to run in exec_mode reproduction_script"
     )
     args = parser.parse_args()
 
